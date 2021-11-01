@@ -60,6 +60,35 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
   Set(sum_hi, sum_reg);
 }
 
+/* Add two 32-bit integers, each represented as a vector of two 16-bit Ints.
+ * The arguments alternate a base name (Nova vector) and an index, pretending
+ * this is indexing N 32-bit elements rather than N*2 16-bit elements. */
+#define ADD32(OUT, OUT_IDX, IN1, IN1_IDX, IN2, IN2_IDX)         \
+  do {                                                          \
+    Add32Bits(IndexVector(OUT, IntConst(2*(OUT_IDX))),		\
+	      IndexVector(OUT, IntConst(2*(OUT_IDX) + 1)),	\
+	      IndexVector(IN1, IntConst(2*(IN1_IDX))),		\
+	      IndexVector(IN1, IntConst(2*(IN1_IDX) + 1)),	\
+	      IndexVector(IN2, IntConst(2*(IN2_IDX))),		\
+	      IndexVector(IN2, IntConst(2*(IN2_IDX) + 1)));	\
+  }								\
+  while (0)
+
+// Key injection for round r.  We assume r << 2**16.
+void inject_key(int r)
+{
+  int i;
+
+  for (i = 0; i < 4; i++)
+    ADD32(random_3fry, i, random_3fry, i, scratch_3fry, (r + i)%5);
+  Add32Bits(IndexVector(random_3fry, IntConst(3*2)),
+	    IndexVector(random_3fry, IntConst(3*2 + 1)),
+	    IndexVector(random_3fry, IntConst(3*2)),
+	    IndexVector(random_3fry, IntConst(3*2 + 1)),
+	    IntConst(0),
+	    IntConst(r));
+}
+
 // Assign each APE a unique row ID, column ID, and overall ID.
 void emitApeIDAssignment()
 {
@@ -86,29 +115,14 @@ void emitApeIDAssignment()
                     Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
 
   // Temporary
-#ifdef XYZZY
-  eControl(controlOpReserveApeReg, apeR0);  // Low
-  eControl(controlOpReserveApeReg, apeR1);  // High
-  DeclareApeVarInit(zero, Int, IntConst(0));
-  DeclareApeVarInit(big, Int, IntConst(0xFFFF));
-  eApeC(apeAdd, apeR0, big, IntConst(0x0001));
-  eApeC(apeAddL, apeR1, zero, zero);
-  TraceOneRegisterOneApe(apeR0, 0, 0);
-  TraceOneRegisterOneApe(apeR1, 0, 0);
-  eControl(controlOpReleaseApeReg, apeR1);
-  eControl(controlOpReleaseApeReg, apeR0);
-#else
   DeclareApeMemVector(dummy, Int, 8);
   Set(IndexVector(dummy, IntConst(2)), IntConst(0x0001));
   Set(IndexVector(dummy, IntConst(3)), IntConst(0xFFFF));
   Set(IndexVector(dummy, IntConst(4)), IntConst(0x0002));
   Set(IndexVector(dummy, IntConst(5)), IntConst(0xEEEE));
-  Add32Bits(IndexVector(dummy, IntConst(0)), IndexVector(dummy, IntConst(1)),
-	    IndexVector(dummy, IntConst(2)), IndexVector(dummy, IntConst(3)),
-	    IndexVector(dummy, IntConst(4)), IndexVector(dummy, IntConst(5)));
+  ADD32(dummy, 0, dummy, 1, dummy, 2);
   TraceOneRegisterOneApe(IndexVector(dummy, IntConst(0)), 0, 0);
   TraceOneRegisterOneApe(IndexVector(dummy, IntConst(1)), 0, 0);
-#endif
 }
 
 // Emit all code to the kernel.
