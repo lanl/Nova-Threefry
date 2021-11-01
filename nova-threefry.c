@@ -30,6 +30,36 @@ int apeRowsLog2;  // Rounded up
 // Bits controling how much tracing to do, per scAcceleratorAPI.h
 int traceFlags;
 
+// Each of the following represent four 32-bit numbers stored as eight Ints.
+Declare(counter_3fry);  /* Input: Loop counter */
+Declare(key_3fry);      /* Input: Key (e.g., APE ID) */
+Declare(random_3fry);   /* Output: Random numbers */
+Declare(scratch_3fry);  /* Internal: Scratch space */
+
+// Define the list of Threefry 32x4 rotation constants.
+const int rot_32x4[] = {
+  10, 26, 11, 21, 13, 27, 23,  5,  6, 20, 17, 11, 25, 10, 18, 20
+};
+
+// Emit code to add two 32-bit numbers.
+void Add32Bits(scExpr sum_hi, scExpr sum_lo,
+	       scExpr a_hi, scExpr a_lo,
+	       scExpr b_hi, scExpr b_lo)
+{
+  // Add the low words.
+  DeclareApeVar(sum_reg, Int)
+  DeclareApeVarInit(a_reg, Int, a_lo)
+  DeclareApeVarInit(b_reg, Int, b_lo)
+  eApeC(apeAdd, sum_reg, a_reg, b_reg);
+  Set(sum_lo, sum_reg);
+
+  // Add the high words.
+  Set(a_reg, a_hi);
+  Set(b_reg, b_hi);
+  eApeC(apeAddL, sum_reg, a_reg, b_reg);
+  Set(sum_hi, sum_reg);
+}
+
 // Assign each APE a unique row ID, column ID, and overall ID.
 void emitApeIDAssignment()
 {
@@ -53,8 +83,32 @@ void emitApeIDAssignment()
 
   // Assign each APE a globally unique ID.
   DeclareApeVarInit(myID, Int,
-		    Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
-  TraceOneRegisterAllApes(myID); // Temporary
+                    Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
+
+  // Temporary
+#ifdef XYZZY
+  eControl(controlOpReserveApeReg, apeR0);  // Low
+  eControl(controlOpReserveApeReg, apeR1);  // High
+  DeclareApeVarInit(zero, Int, IntConst(0));
+  DeclareApeVarInit(big, Int, IntConst(0xFFFF));
+  eApeC(apeAdd, apeR0, big, IntConst(0x0001));
+  eApeC(apeAddL, apeR1, zero, zero);
+  TraceOneRegisterOneApe(apeR0, 0, 0);
+  TraceOneRegisterOneApe(apeR1, 0, 0);
+  eControl(controlOpReleaseApeReg, apeR1);
+  eControl(controlOpReleaseApeReg, apeR0);
+#else
+  DeclareApeMemVector(dummy, Int, 8);
+  Set(IndexVector(dummy, IntConst(2)), IntConst(0x0001));
+  Set(IndexVector(dummy, IntConst(3)), IntConst(0xFFFF));
+  Set(IndexVector(dummy, IntConst(4)), IntConst(0x0002));
+  Set(IndexVector(dummy, IntConst(5)), IntConst(0xEEEE));
+  Add32Bits(IndexVector(dummy, IntConst(0)), IndexVector(dummy, IntConst(1)),
+	    IndexVector(dummy, IntConst(2)), IndexVector(dummy, IntConst(3)),
+	    IndexVector(dummy, IntConst(4)), IndexVector(dummy, IntConst(5)));
+  TraceOneRegisterOneApe(IndexVector(dummy, IntConst(0)), 0, 0);
+  TraceOneRegisterOneApe(IndexVector(dummy, IntConst(1)), 0, 0);
+#endif
 }
 
 // Emit all code to the kernel.
@@ -142,7 +196,7 @@ int main (int argc, char *argv[]) {
 
   // Wait for the kernel to halt.
   scLLKernelWaitSignal();
-  
+
   // Terminate the machine.
   scTerminateMachine();
 }
