@@ -43,8 +43,8 @@ const int rot_32x4[] = {
 
 // Emit code to add two 32-bit numbers.
 void Add32Bits(scExpr sum_hi, scExpr sum_lo,
-	       scExpr a_hi, scExpr a_lo,
-	       scExpr b_hi, scExpr b_lo)
+               scExpr a_hi, scExpr a_lo,
+               scExpr b_hi, scExpr b_lo)
 {
   // Add the low words.
   DeclareApeVar(sum_reg, Int)
@@ -65,13 +65,13 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
  * this is indexing N 32-bit elements rather than N*2 16-bit elements. */
 #define ADD32(OUT, OUT_IDX, IN1, IN1_IDX, IN2, IN2_IDX)         \
   do {                                                          \
-    Add32Bits(IndexVector(OUT, IntConst(2*(OUT_IDX))),		\
-	      IndexVector(OUT, IntConst(2*(OUT_IDX) + 1)),	\
-	      IndexVector(IN1, IntConst(2*(IN1_IDX))),		\
-	      IndexVector(IN1, IntConst(2*(IN1_IDX) + 1)),	\
-	      IndexVector(IN2, IntConst(2*(IN2_IDX))),		\
-	      IndexVector(IN2, IntConst(2*(IN2_IDX) + 1)));	\
-  }								\
+    Add32Bits(IndexVector(OUT, IntConst(2*(OUT_IDX))),          \
+              IndexVector(OUT, IntConst(2*(OUT_IDX) + 1)),      \
+              IndexVector(IN1, IntConst(2*(IN1_IDX))),          \
+              IndexVector(IN1, IntConst(2*(IN1_IDX) + 1)),      \
+              IndexVector(IN2, IntConst(2*(IN2_IDX))),          \
+              IndexVector(IN2, IntConst(2*(IN2_IDX) + 1)));     \
+  }                                                             \
   while (0)
 
 // Key injection for round r.  We assume r << 2**16.
@@ -82,11 +82,51 @@ void inject_key(int r)
   for (i = 0; i < 4; i++)
     ADD32(random_3fry, i, random_3fry, i, scratch_3fry, (r + i)%5);
   Add32Bits(IndexVector(random_3fry, IntConst(3*2)),
-	    IndexVector(random_3fry, IntConst(3*2 + 1)),
-	    IndexVector(random_3fry, IntConst(3*2)),
-	    IndexVector(random_3fry, IntConst(3*2 + 1)),
-	    IntConst(0),
-	    IntConst(r));
+            IndexVector(random_3fry, IntConst(3*2 + 1)),
+            IndexVector(random_3fry, IntConst(3*2)),
+            IndexVector(random_3fry, IntConst(3*2 + 1)),
+            IntConst(0),
+            IntConst(r));
+}
+
+// Mixer operation.
+static void mix(int a, int b, int rconst)
+{
+  // Increment random_3fry[a] by random_3fry[b].
+  ADD32(random_3fry, a, random_3fry, a, random_3fry, b);
+
+  // Left-rotate random_3fry[b] by rconst.
+  if (rconst > 16) {
+    // To rotate by rconst > 8, swap the high and low Ints then rotate by
+    // rconst - 16.
+    DeclareApeVarInit(hi, Int, IndexVector(random_3fry, IntConst(b*2)));
+    DeclareApeVarInit(lo, Int, IndexVector(random_3fry, IntConst(b*2 + 1)));
+    Set(IndexVector(random_3fry, IntConst(b*2)), lo);
+    Set(IndexVector(random_3fry, IntConst(b*2 + 1)), hi);
+    rconst -= 16;
+  }
+  DeclareApeVarInit(hi, Int,
+                    Asl(IndexVector(random_3fry, IntConst(b*2)),
+                        IntConst(rconst)));
+  DeclareApeVarInit(lo, Int,
+                    Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
+                        IntConst(rconst)));
+  Set(hi,
+      Or(hi, Asr(IndexVector(random_3fry, IntConst(b*2 + 1)),
+                 IntConst(16 - rconst))));
+  Set(lo,
+      Or(lo, Asr(IndexVector(random_3fry, IntConst(b*2)),
+                 IntConst(16 - rconst))));
+  Set(IndexVector(random_3fry, IntConst(b*2)), hi);
+  Set(IndexVector(random_3fry, IntConst(b*2 + 1)), lo);
+
+  // Xor the new random_3fry[b] by random_3fry[a].
+  Set(IndexVector(random_3fry, IntConst(b*2)),
+      Xor(IndexVector(random_3fry, IntConst(b*2)),
+          IndexVector(random_3fry, IntConst(a*2))));
+  Set(IndexVector(random_3fry, IntConst(b*2 + 1)),
+      Xor(IndexVector(random_3fry, IntConst(b*2 + 1)),
+          IndexVector(random_3fry, IntConst(a*2 + 1))));
 }
 
 // Assign each APE a unique row ID, column ID, and overall ID.
