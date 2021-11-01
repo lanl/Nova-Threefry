@@ -25,6 +25,7 @@ int chipRows;
 int chipCols;
 int apeRows;
 int apeCols;
+int apeRowsLog2;  // Rounded up
 
 // Bits controling how much tracing to do, per scAcceleratorAPI.h
 int traceFlags;
@@ -52,8 +53,8 @@ void emitApeIDAssignment()
 
   // Assign each APE a globally unique ID.
   DeclareApeVarInit(myID, Int,
-		    Add(Mul(myRow, IntConst(apeCols)), myCol));
-  TraceOneRegisterAllApes(myID);
+		    Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
+  TraceOneRegisterAllApes(myID); // Temporary
 }
 
 // Emit all code to the kernel.
@@ -106,11 +107,12 @@ int main (int argc, char *argv[]) {
   // Initialize Singular arithmetic on CPU
   initSingularArithmetic ();
 
-  // Create a machine
+  // Create a machine.
   chipRows = 1;
   chipCols = 1;
   apeRows = 48;
   apeCols = 44;
+  apeRowsLog2 = 6;
   scInitializeMachine ((emulated ? scEmulated : scRealMachine),
                        chipRows, chipCols, apeRows, apeCols,
                        traceFlags, 0 /* DDR */, 0 /* randomize */, 0 /* torus */);
