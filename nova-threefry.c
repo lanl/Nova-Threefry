@@ -53,6 +53,7 @@ void emitApeIDAssignment()
   // Assign each APE a globally unique ID.
   DeclareApeVarInit(myID, Int,
 		    Add(Mul(myRow, IntConst(apeCols)), myCol));
+  TraceOneRegisterAllApes(myID);
 }
 
 // Emit all code to the kernel.
@@ -125,6 +126,9 @@ int main (int argc, char *argv[]) {
   // Initialize the kernel-creating code.
   scNovaInit();
   scEmitLLKernelCreate();
+
+  // Define a kernel.
+  emitApeIDAssignment();
 
   // Emit the low-level translation of the high-level kernel instructions.
   scKernelTranslate();
