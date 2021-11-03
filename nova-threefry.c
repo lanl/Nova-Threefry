@@ -107,21 +107,21 @@ static void mix(int a, int b, int rconst)
   ADD32(random_3fry, a, random_3fry, a, random_3fry, b);
 
   // Left-rotate random_3fry[b] by rconst.
+  DeclareApeVar(hi, Int);
+  DeclareApeVar(lo, Int);
   if (rconst > 16) {
-    // To rotate by rconst > 8, swap the high and low Ints then rotate by
+    // To rotate by rconst > 16, swap the high and low Ints then rotate by
     // rconst - 16.
-    DeclareApeVarInit(hi, Int, IndexVector(random_3fry, IntConst(b*2)));
-    DeclareApeVarInit(lo, Int, IndexVector(random_3fry, IntConst(b*2 + 1)));
-    Set(IndexVector(random_3fry, IntConst(b*2)), lo);
+    Set(hi, IndexVector(random_3fry, IntConst(b*2)));
+    Set(lo, IndexVector(random_3fry, IntConst(b*2 + 1)));
     Set(IndexVector(random_3fry, IntConst(b*2 + 1)), hi);
+    Set(IndexVector(random_3fry, IntConst(b*2)), lo);
     rconst -= 16;
   }
-  DeclareApeVarInit(hi, Int,
-                    Asl(IndexVector(random_3fry, IntConst(b*2)),
-                        IntConst(rconst)));
-  DeclareApeVarInit(lo, Int,
-                    Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
-                        IntConst(rconst)));
+  Set(hi, Asl(IndexVector(random_3fry, IntConst(b*2)),
+	      IntConst(rconst)));
+  Set(lo, Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
+	      IntConst(rconst)));
   Set(hi,
       Or(hi, Asr(IndexVector(random_3fry, IntConst(b*2 + 1)),
                  IntConst(16 - rconst))));
@@ -168,11 +168,6 @@ void threefry4x32()
         Xor(IndexVector(scratch_3fry, IntConst(9)),
             IndexVector(key_3fry, lo)));
     ADD32(random_3fry, i, random_3fry, i, scratch_3fry, i);
-
-    // Temporary
-    TraceMessage("RANDOM AFTER ADD32\n");
-    for (int j = 0; j < 8; j++)
-      TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
   }
 
   // Perform 20 rounds of mixing.
@@ -240,6 +235,12 @@ void emitAll()
 
   // Invoke the random-number generator.
   threefry4x32();
+
+
+  // Temporary
+  TraceMessage("FINAL RANDOM\n");
+  for (int j = 0; j < 8; j++)
+    TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
 
   // Halt the kernel.
   eCUC(cuHalt, _, _, _);
