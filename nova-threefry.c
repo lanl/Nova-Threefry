@@ -46,18 +46,26 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
                scExpr a_hi, scExpr a_lo,
                scExpr b_hi, scExpr b_lo)
 {
-  // Add the low words.
-  DeclareApeVar(sum_reg, Int)
-  DeclareApeVarInit(a_reg, Int, a_lo)
-  DeclareApeVarInit(b_reg, Int, b_lo)
-  eApeC(apeAdd, sum_reg, a_reg, b_reg);
-  Set(sum_lo, sum_reg);
+  // Copy all arguments to variables to perform all arithmetic (constant
+  // construction, vector indexing, etc.) up front.
+  DeclareApeVar(a_lo_reg, Int);
+  DeclareApeVar(a_hi_reg, Int);
+  DeclareApeVar(b_lo_reg, Int);
+  DeclareApeVar(b_hi_reg, Int);
+  DeclareApeVar(sum_lo_reg, Int);
+  DeclareApeVar(sum_hi_reg, Int);
+  Set(a_lo_reg, a_lo);
+  Set(a_hi_reg, a_hi);
+  Set(b_lo_reg, b_lo);
+  Set(b_hi_reg, b_hi);
 
-  // Add the high words.
-  Set(a_reg, a_hi);
-  Set(b_reg, b_hi);
-  eApeC(apeAddL, sum_reg, a_reg, b_reg);
-  Set(sum_hi, sum_reg);
+  // Perform the 32-bit addition.
+  eApeC(apeAdd,  sum_lo_reg, a_lo_reg, b_lo_reg);
+  eApeC(apeAddL, sum_hi_reg, a_hi_reg, b_hi_reg);
+
+  // Copy the 32-bit sum to its target location.
+  Set(sum_lo, sum_lo_reg);
+  Set(sum_hi, sum_hi_reg);
 }
 
 /* Add two 32-bit integers, each represented as a vector of two 16-bit Ints.
