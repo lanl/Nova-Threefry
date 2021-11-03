@@ -215,7 +215,7 @@ void emitApeIDAssignment()
 void emitAll()
 {
   int i;
-  
+
   // Assign IDs to APEs.
   emitApeIDAssignment();
 
@@ -230,9 +230,13 @@ void emitAll()
     Set(IndexVector(key_3fry, IntConst(i)), IntConst(0));  // TODO: Randomize.
   Set(IndexVector(key_3fry, IntConst(7)), Add(myID, IntConst(1)));
 
+  // Invoke the random-number generator.
+  threefry4x32();
+
   // Temporary
-  TraceOneRegisterAllApes(IndexVector(key_3fry, IntConst(7)));
-  
+  for (i = 0; i < 8; i++)
+    TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(i)), 0, 0);
+
   // Halt the kernel.
   eCUC(cuHalt, _, _, _);
 }
