@@ -151,9 +151,12 @@ void threefry4x32()
   ApeMemVector(scratch_3fry, Int, 10);
   Set(IndexVector(scratch_3fry, IntConst(8)), IntConst(0x1BD1));
   Set(IndexVector(scratch_3fry, IntConst(9)), IntConst(0x1BDA));
+
   for (i = 0; i < 4; i++) {
-    DeclareApeVarInit(hi, Int, IntConst(i*2));
-    DeclareApeVarInit(lo, Int, IntConst(i*2 + 1));
+    DeclareApeVar(hi, Int);
+    DeclareApeVar(lo, Int);
+    Set(hi, IntConst(i*2));
+    Set(lo, IntConst(i*2 + 1));
     Set(IndexVector(scratch_3fry, hi), IndexVector(key_3fry, hi));
     Set(IndexVector(scratch_3fry, lo), IndexVector(key_3fry, lo));
     Set(IndexVector(random_3fry, hi), IndexVector(counter_3fry, hi));
@@ -165,6 +168,11 @@ void threefry4x32()
         Xor(IndexVector(scratch_3fry, IntConst(9)),
             IndexVector(key_3fry, lo)));
     ADD32(random_3fry, i, random_3fry, i, scratch_3fry, i);
+
+    // Temporary
+    TraceMessage("RANDOM AFTER ADD32\n");
+    for (int j = 0; j < 8; j++)
+      TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
   }
 
   // Perform 20 rounds of mixing.
@@ -232,10 +240,6 @@ void emitAll()
 
   // Invoke the random-number generator.
   threefry4x32();
-
-  // Temporary
-  for (i = 0; i < 8; i++)
-    TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(i)), 0, 0);
 
   // Halt the kernel.
   eCUC(cuHalt, _, _, _);
