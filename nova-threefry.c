@@ -31,10 +31,13 @@ int apeRowsLog2;  // Rounded up
 int traceFlags;
 
 // Each of the following represent four 32-bit numbers stored as eight Ints.
-Declare(counter_3fry);  /* Input: Loop counter */
-Declare(key_3fry);      /* Input: Key (e.g., APE ID) */
-Declare(random_3fry);   /* Output: Random numbers */
-Declare(scratch_3fry);  /* Internal: Scratch space */
+Declare(counter_3fry);  // Input: Loop counter
+Declare(key_3fry);      // Input: Key (e.g., APE ID)
+Declare(random_3fry);   // Output: Random numbers
+Declare(scratch_3fry);  // Internal: Scratch space
+
+// Each APE needs a unique ID.  TODO: Make this a 32-bit value.
+Declare(myID);
 
 // Define the list of Threefry 32x4 rotation constants.
 const int rot_32x4[] = {
@@ -137,6 +140,51 @@ static void mix(int a, int b, int rconst)
           IndexVector(random_3fry, IntConst(a*2 + 1))));
 }
 
+/* Use counter_3fry and key_3fry to generate random numbers random_3fry. */
+void threefry4x32()
+{
+  int r;  /* Round */
+  int i;
+
+  /* Initialize both the internal and output state. */
+  ApeMemVector(random_3fry, Int, 8);
+  ApeMemVector(scratch_3fry, Int, 10);
+  Set(IndexVector(scratch_3fry, IntConst(8)), IntConst(0x1BD1));
+  Set(IndexVector(scratch_3fry, IntConst(9)), IntConst(0x1BDA));
+  for (i = 0; i < 4; i++) {
+    DeclareApeVarInit(hi, Int, IntConst(i*2));
+    DeclareApeVarInit(lo, Int, IntConst(i*2 + 1));
+    Set(IndexVector(scratch_3fry, hi), IndexVector(key_3fry, hi));
+    Set(IndexVector(scratch_3fry, lo), IndexVector(key_3fry, lo));
+    Set(IndexVector(random_3fry, hi), IndexVector(counter_3fry, hi));
+    Set(IndexVector(random_3fry, lo), IndexVector(counter_3fry, lo));
+    Set(IndexVector(scratch_3fry, IntConst(8)),
+        Xor(IndexVector(scratch_3fry, IntConst(8)),
+            IndexVector(key_3fry, hi)));
+    Set(IndexVector(scratch_3fry, IntConst(9)),
+        Xor(IndexVector(scratch_3fry, IntConst(9)),
+            IndexVector(key_3fry, lo)));
+    ADD32(random_3fry, i, random_3fry, i, scratch_3fry, i);
+  }
+
+  // Perform 20 rounds of mixing.
+  for (r = 0; r < 20; r++) {
+    /* Inject */
+    if (r%4 == 0 && r > 0)
+      inject_key(r/4);
+
+    /* Mix */
+    if (r%2 == 0) {
+      mix(0, 1, (2*r)%16);
+      mix(2, 3, (2*r + 1)%16);
+    }
+    else {
+      mix(0, 3, (2*r)%16);
+      mix(2, 1, (2*r + 1)%16);
+    }
+  }
+}
+
 // Assign each APE a unique row ID, column ID, and overall ID.
 void emitApeIDAssignment()
 {
@@ -159,26 +207,32 @@ void emitApeIDAssignment()
   Set(myCol, Sub(myCol, IntConst(1)));  // Use zero-based numbering.
 
   // Assign each APE a globally unique ID.
-  DeclareApeVarInit(myID, Int,
-                    Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
-
-  // Temporary
-  DeclareApeMemVector(dummy, Int, 8);
-  Set(IndexVector(dummy, IntConst(2)), IntConst(0x0001));
-  Set(IndexVector(dummy, IntConst(3)), IntConst(0xFFFF));
-  Set(IndexVector(dummy, IntConst(4)), IntConst(0x0002));
-  Set(IndexVector(dummy, IntConst(5)), IntConst(0xEEEE));
-  ADD32(dummy, 0, dummy, 1, dummy, 2);
-  TraceOneRegisterOneApe(IndexVector(dummy, IntConst(0)), 0, 0);
-  TraceOneRegisterOneApe(IndexVector(dummy, IntConst(1)), 0, 0);
+  ApeVar(myID, Int);
+  Set(myID, Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
 }
 
 // Emit all code to the kernel.
 void emitAll()
 {
+  int i;
+  
   // Assign IDs to APEs.
   emitApeIDAssignment();
 
+  // Initialize the loop counter and key.  I don't believe 0 is allowed so
+  // we add 1.
+  ApeMemVector(counter_3fry, Int, 8);
+  for (i = 0; i < 7; i++)
+    Set(IndexVector(counter_3fry, IntConst(i)), IntConst(0));  // TODO: Randomize.
+  Set(IndexVector(counter_3fry, IntConst(7)), IntConst(1));
+  ApeMemVector(key_3fry, Int, 8);
+  for (i = 0; i < 7; i++)
+    Set(IndexVector(key_3fry, IntConst(i)), IntConst(0));  // TODO: Randomize.
+  Set(IndexVector(key_3fry, IntConst(7)), Add(myID, IntConst(1)));
+
+  // Temporary
+  TraceOneRegisterAllApes(IndexVector(key_3fry, IntConst(7)));
+  
   // Halt the kernel.
   eCUC(cuHalt, _, _, _);
 }
@@ -246,7 +300,7 @@ int main (int argc, char *argv[]) {
   scEmitLLKernelCreate();
 
   // Define a kernel.
-  emitApeIDAssignment();
+  emitAll();
 
   // Emit the low-level translation of the high-level kernel instructions.
   scKernelTranslate();
