@@ -85,7 +85,7 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
   }                                                             \
   while (0)
 
-// Key injection for round r.  We assume r << 2**16.
+// Key injection for round/4.
 void inject_key(int r)
 {
   int i;
@@ -98,47 +98,50 @@ void inject_key(int r)
             IndexVector(random_3fry, IntConst(3*2 + 1)),
             IntConst(0),
             IntConst(r));
-}
-
-// Mixer operation.
-static void mix(int a, int b, int ridx)
-{
-  int rconst = rot_32x4[ridx];
-
-  // Increment random_3fry[a] by random_3fry[b].
-  ADD32(random_3fry, a, random_3fry, a, random_3fry, b);
 
   // Temporary
   if (1) {
     char buf[100];
-    sprintf(buf, "AFTER ADD32 (%d, %d, %d)\n", a, b, rconst);
+    sprintf(buf, "AFTER INJECT, ROUND %d\n", r*4);
     TraceMessage(strdup(buf));
     for (int j = 0; j < 8; j++)
       TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
   }
+}
 
-  // Left-rotate random_3fry[b] by rconst.
+// Mixer operation.
+void mix(int a, int b, int ridx)
+{
+  int rot = rot_32x4[ridx];  // Number of bits by which to left-rotate
+
+  // Temporary
+  int orig_rot = rot;
+
+  // Increment random_3fry[a] by random_3fry[b].
+  ADD32(random_3fry, a, random_3fry, a, random_3fry, b);
+
+  // Left-rotate random_3fry[b] by rot.
   DeclareApeVar(hi, Int);
   DeclareApeVar(lo, Int);
-  if (rconst > 16) {
-    // To rotate by rconst > 16, swap the high and low Ints then rotate by
-    // rconst - 16.
+  if (rot > 16) {
+    // To rotate by rot > 16, swap the high and low Ints then rotate by
+    // rot - 16.
     Set(hi, IndexVector(random_3fry, IntConst(b*2)));
     Set(lo, IndexVector(random_3fry, IntConst(b*2 + 1)));
     Set(IndexVector(random_3fry, IntConst(b*2 + 1)), hi);
     Set(IndexVector(random_3fry, IntConst(b*2)), lo);
-    rconst -= 16;
+    rot -= 16;
   }
   Set(hi, Asl(IndexVector(random_3fry, IntConst(b*2)),
-              IntConst(rconst)));
+              IntConst(rot)));
   Set(lo, Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
-              IntConst(rconst)));
+              IntConst(rot)));
   Set(hi,
       Or(hi, Asr(IndexVector(random_3fry, IntConst(b*2 + 1)),
-                 IntConst(16 - rconst))));
+                 IntConst(16 - rot))));
   Set(lo,
       Or(lo, Asr(IndexVector(random_3fry, IntConst(b*2)),
-                 IntConst(16 - rconst))));
+                 IntConst(16 - rot))));
   Set(IndexVector(random_3fry, IntConst(b*2)), hi);
   Set(IndexVector(random_3fry, IntConst(b*2 + 1)), lo);
 
@@ -149,6 +152,15 @@ static void mix(int a, int b, int ridx)
   Set(IndexVector(random_3fry, IntConst(b*2 + 1)),
       Xor(IndexVector(random_3fry, IntConst(b*2 + 1)),
           IndexVector(random_3fry, IntConst(a*2 + 1))));
+
+  // Temporary
+  if (1) {
+    char buf[100];
+    sprintf(buf, "AFTER MIX OF ROTATION %d (RIDX %d)\n", orig_rot, ridx);
+    TraceMessage(strdup(buf));
+    for (int j = 0; j < 8; j++)
+      TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
+  }
 }
 
 /* Use counter_3fry and key_3fry to generate random numbers random_3fry. */
