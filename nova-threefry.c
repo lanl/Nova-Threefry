@@ -101,10 +101,21 @@ void inject_key(int r)
 }
 
 // Mixer operation.
-static void mix(int a, int b, int rconst)
+static void mix(int a, int b, int ridx)
 {
+  int rconst = rot_32x4[ridx];
+
   // Increment random_3fry[a] by random_3fry[b].
   ADD32(random_3fry, a, random_3fry, a, random_3fry, b);
+
+  // Temporary
+  if (1) {
+    char buf[100];
+    sprintf(buf, "AFTER ADD32 (%d, %d, %d)\n", a, b, rconst);
+    TraceMessage(strdup(buf));
+    for (int j = 0; j < 8; j++)
+      TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
+  }
 
   // Left-rotate random_3fry[b] by rconst.
   DeclareApeVar(hi, Int);
@@ -119,9 +130,9 @@ static void mix(int a, int b, int rconst)
     rconst -= 16;
   }
   Set(hi, Asl(IndexVector(random_3fry, IntConst(b*2)),
-	      IntConst(rconst)));
+              IntConst(rconst)));
   Set(lo, Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
-	      IntConst(rconst)));
+              IntConst(rconst)));
   Set(hi,
       Or(hi, Asr(IndexVector(random_3fry, IntConst(b*2 + 1)),
                  IntConst(16 - rconst))));
@@ -235,7 +246,6 @@ void emitAll()
 
   // Invoke the random-number generator.
   threefry4x32();
-
 
   // Temporary
   TraceMessage("FINAL RANDOM\n");
