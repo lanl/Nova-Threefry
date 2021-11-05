@@ -36,8 +36,9 @@ Declare(key_3fry);      // Input: Key (e.g., APE ID)
 Declare(random_3fry);   // Output: Random numbers
 Declare(scratch_3fry);  // Internal: Scratch space
 
-// Each APE needs a unique ID.  TODO: Make this a 32-bit value.
-Declare(myID);
+// Each APE will be told its row and column number.
+Declare(myRow);
+Declare(myCol);
 
 // Define the list of Threefry 32x4 rotation constants.
 const int rot_32x4[] = {
@@ -231,7 +232,8 @@ void threefry4x32()
 void emitApeIDAssignment()
 {
   // Tell each APE its row number.
-  DeclareApeVarInit(myRow, Int, IntConst(0));
+  ApeVar(myRow, Int);
+  Set(myRow, IntConst(0));
   DeclareCUVar(rowNum, Int);
   CUFor(rowNum, IntConst(1), IntConst(apeRows), IntConst(1));
   eApeC(apeGet, myRow, _, getNorth);
@@ -240,17 +242,14 @@ void emitApeIDAssignment()
   Set(myRow, Sub(myRow, IntConst(1)));  // Use zero-based numbering.
 
   // Tell each APE its column number.
-  DeclareApeVarInit(myCol, Int, IntConst(0));
+  ApeVar(myCol, Int);
+  Set(myCol, IntConst(0));
   DeclareCUVar(colNum, Int);
   CUFor(colNum, IntConst(1), IntConst(apeCols), IntConst(1));
   eApeC(apeGet, myCol, _, getWest);
   Set(myCol, Add(myCol, IntConst(1)));
   CUForEnd();
   Set(myCol, Sub(myCol, IntConst(1)));  // Use zero-based numbering.
-
-  // Assign each APE a globally unique ID.
-  ApeVar(myID, Int);
-  Set(myID, Add(Asl(myRow, IntConst(apeRowsLog2)), myCol));
 }
 
 // Emit all code to the kernel.
@@ -268,9 +267,10 @@ void emitAll()
     Set(IndexVector(counter_3fry, IntConst(i)), IntConst(0));  // TODO: Randomize.
   Set(IndexVector(counter_3fry, IntConst(7)), IntConst(1));
   ApeMemVector(key_3fry, Int, 8);
-  for (i = 0; i < 7; i++)
+  for (i = 0; i < 6; i++)
     Set(IndexVector(key_3fry, IntConst(i)), IntConst(0));  // TODO: Randomize.
-  Set(IndexVector(key_3fry, IntConst(7)), Add(myID, IntConst(1)));
+  Set(IndexVector(key_3fry, IntConst(6)), Add(myRow, IntConst(1)));
+  Set(IndexVector(key_3fry, IntConst(7)), Add(myCol, IntConst(1)));
 
   // Invoke the random-number generator.
   threefry4x32();
