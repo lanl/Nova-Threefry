@@ -204,8 +204,9 @@ void threefry4x32()
     Set(IndexVector(scratch_3fry, IntConst(9)),
         Xor(IndexVector(scratch_3fry, IntConst(9)),
             IndexVector(key_3fry, lo)));
-    ADD32(random_3fry, i, random_3fry, i, scratch_3fry, i);
   }
+  for (i = 0; i < 4; i++)
+    ADD32(random_3fry, i, random_3fry, i, scratch_3fry, i);
 
   // Perform 20 rounds of mixing.
   for (r = 0; r < 20; r++) {
@@ -223,6 +224,7 @@ void threefry4x32()
       mix(2, 1, (2*r + 1)%16);
     }
   }
+  inject_key(20/4);
 }
 
 // Assign each APE a unique row ID, column ID, and overall ID.
