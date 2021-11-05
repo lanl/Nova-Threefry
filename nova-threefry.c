@@ -44,6 +44,15 @@ const int rot_32x4[] = {
   10, 26, 11, 21, 13, 27, 23,  5,  6, 20, 17, 11, 25, 10, 18, 20
 };
 
+// Emit code to assign a hardware register's value to a Nova variable.
+#define SET_VAR_FROM_REG(V, R)                          \
+  do {                                                  \
+    DeclareApeMem(RegStaging, Int);                     \
+    eApeC(apeStore, R, _, MemAddress(RegStaging));      \
+    Set(V, RegStaging);                                 \
+  }                                                     \
+  while (0)
+
 // Emit code to add two 32-bit numbers.
 void Add32Bits(scExpr sum_hi, scExpr sum_lo,
                scExpr a_hi, scExpr a_lo,
@@ -51,16 +60,16 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
 {
   // Copy all arguments to variables to perform all arithmetic (constant
   // construction, vector indexing, etc.) up front.
-  DeclareApeVar(a_lo_reg, Int);
-  DeclareApeVar(a_hi_reg, Int);
-  DeclareApeVar(b_lo_reg, Int);
-  DeclareApeVar(b_hi_reg, Int);
-  DeclareApeVar(sum_lo_reg, Int);
-  DeclareApeVar(sum_hi_reg, Int);
-  Set(a_lo_reg, a_lo);
-  Set(a_hi_reg, a_hi);
-  Set(b_lo_reg, b_lo);
-  Set(b_hi_reg, b_hi);
+  DeclareApeVar(a_lo_var, Int);
+  DeclareApeVar(a_hi_var, Int);
+  DeclareApeVar(b_lo_var, Int);
+  DeclareApeVar(b_hi_var, Int);
+  DeclareApeVar(sum_lo_var, Int);
+  DeclareApeVar(sum_hi_var, Int);
+  Set(a_lo_var, a_lo);
+  Set(a_hi_var, a_hi);
+  Set(b_lo_var, b_lo);
+  Set(b_hi_var, b_hi);
 
   // Because we take scExprs as inputs but will be working directly with
   // registers, we need to stage our data from scExpr --> variable -->
@@ -69,24 +78,24 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
   eControl(controlOpReserveApeReg, apeR1);
 
   // Add the low-order words.
-  eApeX(apeSet, apeR0, _, a_lo_reg);
-  eApeX(apeSet, apeR1, _, b_lo_reg);
+  eApeX(apeSet, apeR0, _, a_lo_var);
+  eApeX(apeSet, apeR1, _, b_lo_var);
   eApeR(apeAdd, apeR0, apeR0, apeR1);
-  eApeR(apeSet, sum_lo_reg, _, apeR0);
+  SET_VAR_FROM_REG(sum_lo_var, apeR0);
 
   // Add the high-order words with carry.
-  eApeX(apeSet, apeR0, _, a_hi_reg);
-  eApeX(apeSet, apeR1, _, b_hi_reg);
+  eApeX(apeSet, apeR0, _, a_hi_var);
+  eApeX(apeSet, apeR1, _, b_hi_var);
   eApeR(apeAddL, apeR0, apeR0, apeR1);
-  eApeR(apeSet, sum_hi_reg, _, apeR0);
+  SET_VAR_FROM_REG(sum_hi_var, apeR0);
 
   // Release the reserved registers.
   eControl(controlOpReleaseApeReg, apeR0);
   eControl(controlOpReleaseApeReg, apeR1);
 
   // Copy the low- and high-order words to their final destination.
-  Set(sum_lo, sum_lo_reg);
-  Set(sum_hi, sum_hi_reg);
+  Set(sum_lo, sum_lo_var);
+  Set(sum_hi, sum_hi_var);
 }
 
 /* Add two 32-bit integers, each represented as a vector of two 16-bit Ints.
