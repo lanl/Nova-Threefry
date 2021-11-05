@@ -62,11 +62,29 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
   Set(b_lo_reg, b_lo);
   Set(b_hi_reg, b_hi);
 
-  // Perform the 32-bit addition.
-  eApeC(apeAdd,  sum_lo_reg, a_lo_reg, b_lo_reg);
-  eApeC(apeAddL, sum_hi_reg, a_hi_reg, b_hi_reg);
+  // Because we take scExprs as inputs but will be working directly with
+  // registers, we need to stage our data from scExpr --> variable -->
+  // register.  We reserve two registers for this.
+  eControl(controlOpReserveApeReg, apeR0);
+  eControl(controlOpReserveApeReg, apeR1);
 
-  // Copy the 32-bit sum to its target location.
+  // Add the low-order words.
+  eApeX(apeSet, apeR0, _, a_lo_reg);
+  eApeX(apeSet, apeR1, _, b_lo_reg);
+  eApeR(apeAdd, apeR0, apeR0, apeR1);
+  eApeR(apeSet, sum_lo_reg, _, apeR0);
+
+  // Add the high-order words with carry.
+  eApeX(apeSet, apeR0, _, a_hi_reg);
+  eApeX(apeSet, apeR1, _, b_hi_reg);
+  eApeR(apeAddL, apeR0, apeR0, apeR1);
+  eApeR(apeSet, sum_hi_reg, _, apeR0);
+
+  // Release the reserved registers.
+  eControl(controlOpReleaseApeReg, apeR0);
+  eControl(controlOpReleaseApeReg, apeR1);
+
+  // Copy the low- and high-order words to their final destination.
   Set(sum_lo, sum_lo_reg);
   Set(sum_hi, sum_hi_reg);
 }
@@ -123,27 +141,35 @@ void mix(int a, int b, int ridx)
   // Left-rotate random_3fry[b] by rot.
   DeclareApeVar(hi, Int);
   DeclareApeVar(lo, Int);
-  if (rot > 16) {
-    // To rotate by rot > 16, swap the high and low Ints then rotate by
-    // rot - 16.
+  if (orig_rot >= 16) {
+    // To rotate by rot >= 16, swap the high and low Ints then prepare to
+    // rotate by rot - 16.
     Set(hi, IndexVector(random_3fry, IntConst(b*2)));
     Set(lo, IndexVector(random_3fry, IntConst(b*2 + 1)));
     Set(IndexVector(random_3fry, IntConst(b*2 + 1)), hi);
     Set(IndexVector(random_3fry, IntConst(b*2)), lo);
     rot -= 16;
   }
-  Set(hi, Asl(IndexVector(random_3fry, IntConst(b*2)),
-              IntConst(rot)));
-  Set(lo, Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
-              IntConst(rot)));
-  Set(hi,
-      Or(hi, Asr(IndexVector(random_3fry, IntConst(b*2 + 1)),
-                 IntConst(16 - rot))));
-  Set(lo,
-      Or(lo, Asr(IndexVector(random_3fry, IntConst(b*2)),
-                 IntConst(16 - rot))));
-  Set(IndexVector(random_3fry, IntConst(b*2)), hi);
-  Set(IndexVector(random_3fry, IntConst(b*2 + 1)), lo);
+  if (rot != 0) {
+    Set(hi, Asl(IndexVector(random_3fry, IntConst(b*2)),
+                IntConst(rot)));
+    Set(lo, Asl(IndexVector(random_3fry, IntConst(b*2 + 1)),
+                IntConst(rot)));
+    DeclareApeVar(mask, Int);
+    Set(mask, IntConst((1<<rot) - 1));
+    Set(hi,
+        Or(hi,
+           And(Asr(IndexVector(random_3fry, IntConst(b*2 + 1)),
+                   IntConst(16 - rot)),
+               mask)));
+    Set(lo,
+        Or(lo,
+           And(Asr(IndexVector(random_3fry, IntConst(b*2)),
+                   IntConst(16 - rot)),
+               mask)));
+    Set(IndexVector(random_3fry, IntConst(b*2)), hi);
+    Set(IndexVector(random_3fry, IntConst(b*2 + 1)), lo);
+  }
 
   // Xor the new random_3fry[b] by random_3fry[a].
   Set(IndexVector(random_3fry, IntConst(b*2)),
