@@ -45,15 +45,6 @@ const int rot_32x4[] = {
   10, 26, 11, 21, 13, 27, 23,  5,  6, 20, 17, 11, 25, 10, 18, 20
 };
 
-// Emit code to assign a hardware register's value to a Nova variable.
-#define SET_VAR_FROM_REG(V, R)                          \
-  do {                                                  \
-    DeclareApeMem(RegStaging, Int);                     \
-    eApeC(apeStore, R, _, MemAddress(RegStaging));      \
-    Set(V, RegStaging);                                 \
-  }                                                     \
-  while (0)
-
 // Emit code to add two 32-bit numbers.
 void Add32Bits(scExpr sum_hi, scExpr sum_lo,
                scExpr a_hi, scExpr a_lo,
@@ -81,20 +72,18 @@ void Add32Bits(scExpr sum_hi, scExpr sum_lo,
   // Add the low-order words.
   eApeX(apeSet, apeR0, _, a_lo_var);
   eApeX(apeSet, apeR1, _, b_lo_var);
-  eApeR(apeAdd, apeR0, apeR0, apeR1);
-  SET_VAR_FROM_REG(sum_lo_var, apeR0);
+  eApeR(apeAdd, sum_lo_var, apeR0, apeR1);
 
   // Add the high-order words with carry.
   eApeX(apeSet, apeR0, _, a_hi_var);
   eApeX(apeSet, apeR1, _, b_hi_var);
-  eApeR(apeAddL, apeR0, apeR0, apeR1);
-  SET_VAR_FROM_REG(sum_hi_var, apeR0);
+  eApeR(apeAddL, sum_hi_var, apeR0, apeR1);
 
   // Release the reserved registers.
   eControl(controlOpReleaseApeReg, apeR0);
   eControl(controlOpReleaseApeReg, apeR1);
 
-  // Copy the low- and high-order words to their final destination.
+  // Copy the low-order and high-order words to their final destination.
   Set(sum_lo, sum_lo_var);
   Set(sum_hi, sum_hi_var);
 }
