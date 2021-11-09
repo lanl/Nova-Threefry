@@ -25,7 +25,6 @@ int chipRows;
 int chipCols;
 int apeRows;
 int apeCols;
-int apeRowsLog2;  // Rounded up
 
 // Bits controling how much tracing to do, per scAcceleratorAPI.h
 int traceFlags;
@@ -49,15 +48,26 @@ const int rot_32x4[] = {
 void debug_random_state(char *notused, MachineState *state)
 {
   size_t addr = MemAddress(random_3fry);
-  printf("APE(0, 0): %04X%04X %04X%04X %04X%04X %04X%04X\n",
-         state->ApeMemory[0][0][0][0][addr + 0],
-         state->ApeMemory[0][0][0][0][addr + 1],
-         state->ApeMemory[0][0][0][0][addr + 2],
-         state->ApeMemory[0][0][0][0][addr + 3],
-         state->ApeMemory[0][0][0][0][addr + 4],
-         state->ApeMemory[0][0][0][0][addr + 5],
-         state->ApeMemory[0][0][0][0][addr + 6],
-         state->ApeMemory[0][0][0][0][addr + 7]);
+  int cr, cc, ar, ac;
+
+  for (cr = 0; cr < chipRows; cr++)
+    for (cc = 0; cc < chipCols; cc++)
+      for (ar = 0; ar < apeRows; ar++)
+        for (ac = 0; ac < apeCols; ac++) {
+          int abs_ar = cr*apeRows + ar;
+          int abs_ac = cc*apeCols + ac;
+
+          printf("APE(%d, %d): %04X%04X %04X%04X %04X%04X %04X%04X\n",
+                 abs_ar, abs_ac,
+                 state->ApeMemory[cr][cc][ar][ac][addr + 0],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 1],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 2],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 3],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 4],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 5],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 6],
+                 state->ApeMemory[cr][cc][ar][ac][addr + 7]);
+        }
 }
 
 // Emit code to add two 32-bit numbers.
@@ -332,7 +342,6 @@ int main (int argc, char *argv[])
   chipCols = 1;
   apeRows = 48;
   apeCols = 44;
-  apeRowsLog2 = 6;
   scInitializeMachine ((emulated ? scEmulated : scRealMachine),
                        chipRows, chipCols, apeRows, apeCols,
                        traceFlags, 0 /* DDR */, 0 /* randomize */, 0 /* torus */);
