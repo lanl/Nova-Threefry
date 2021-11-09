@@ -45,6 +45,21 @@ const int rot_32x4[] = {
   10, 26, 11, 21, 13, 27, 23,  5,  6, 20, 17, 11, 25, 10, 18, 20
 };
 
+// Define a callback for debugging the generated random numbers.
+void debug_random_state(char *notused, MachineState *state)
+{
+  size_t addr = MemAddress(random_3fry);
+  printf("APE(0, 0): %04X%04X %04X%04X %04X%04X %04X%04X\n",
+         state->ApeMemory[0][0][0][0][addr + 0],
+         state->ApeMemory[0][0][0][0][addr + 1],
+         state->ApeMemory[0][0][0][0][addr + 2],
+         state->ApeMemory[0][0][0][0][addr + 3],
+         state->ApeMemory[0][0][0][0][addr + 4],
+         state->ApeMemory[0][0][0][0][addr + 5],
+         state->ApeMemory[0][0][0][0][addr + 6],
+         state->ApeMemory[0][0][0][0][addr + 7]);
+}
+
 // Emit code to add two 32-bit numbers.
 void Add32Bits(scExpr sum_hi, scExpr sum_lo,
                scExpr a_hi, scExpr a_lo,
@@ -264,16 +279,15 @@ void emitAll()
   // Invoke the random-number generator.
   threefry4x32();
 
-  // Temporary
-  TraceMessage("FINAL RANDOM\n");
-  for (int j = 0; j < 8; j++)
-    TraceOneRegisterOneApe(IndexVector(random_3fry, IntConst(j)), 0, 0);
+  // DEBUG: Output the random numbers we just generated.
+  TraceCallback(debug_random_state, "");
 
   // Halt the kernel.
   eCUC(cuHalt, _, _, _);
 }
 
-int main (int argc, char *argv[]) {
+int main (int argc, char *argv[])
+{
   //      {real | emulated}
   //      <trace>  see trace flags
 
